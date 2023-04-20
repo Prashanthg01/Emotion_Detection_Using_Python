@@ -1,41 +1,106 @@
 import cv2
+from tensorflow.keras.models import load_model
+import numpy as np
 import winsound
+import os
+import time
+from twilio.rest import Client
 
-# Load the cascade for face detection
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# Load the saved model
+loaded_model = load_model('my_model.h5')
 
-# Initialize the webcam
+# Define the emotion labels
+emotion_labels = ['Not Attentive', 'Not Attentive', 'Not Attentive', 'Not Attentive', 'Not Attentive', 'Not Attentive', 'Attentive']
+
+# Create a face detector object
+face_detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
+# Start capturing video
 cap = cv2.VideoCapture(0)
 
+# Set the threshold for attentiveness
+threshold = 0.5
+
+# Initialize counters for attentive and not attentive faces
+attentive_faces = 0
+not_attentive_faces = 0
+
+last_attentive_time = time.time()
+
+# Loop over frames from the video stream
 while True:
-    # Read the frame from the webcam
+    # Read a frame from the video stream
     ret, frame = cap.read()
 
     # Convert the frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Detect faces in the grayscale frame
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    faces = face_detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-    if len(faces) > 0:
-        print("active")
-        # Play a beep sound
+    # Update the total faces counter
+    total_faces = len(faces)
 
-    else:
-        print("deactive")
-        winsound.Beep(1000, 500)
+    # Reset the counters for attentive and not attentive faces
+    attentive_faces = 0
+    not_attentive_faces = 0
 
-    # Draw rectangles around the detected faces
+    # Loop over detected faces
     for (x, y, w, h) in faces:
-        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        # Extract the face from the frame
+        face = frame[y:y+h, x:x+w]
 
-    # Display the resulting frame
-    cv2.imshow('Face Detection', frame)
+        # Preprocess the face image
+        face = cv2.resize(face, (48, 48))
+        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+        face = np.reshape(face, [1, 48, 48, 1])
 
-    # Exit the program if the 'q' key is pressed
-    if cv2.waitKey(1) == ord('q'):
+        # Predict the emotion of the face
+        result = loaded_model.predict(face)[0]
+
+        # Determine the predicted emotion label
+        predicted_emotion = emotion_labels[np.argmax(result)]
+
+        # Draw a rectangle around the face
+        if predicted_emotion == 'Attentive':
+            color = (0, 255, 0)  # green
+            attentive_faces += 1
+        else:
+            color = (0, 0, 255)  # red
+            not_attentive_faces += 1
+
+        cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+
+        # Add the predicted emotion label to the frame
+        cv2.putText(frame, predicted_emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+
+    # Check if any faces were detected
+    if total_faces > 0:
+        # Calculate the percentage of attentive faces
+        percent_attentive = attentive_faces / total_faces
+
+        # Check if the percentage of attentive faces is below the threshold
+        if percent_attentive < threshold:
+            if time.time() - last_attentive_time > 30:
+            # Play a sound to alert the user
+                winsound.Beep(1000, 500)
+                account_sid = "ACb7514fa273bb9bb6390f3734f0368ed7"
+                auth_token = "93fb44bdf1a279a42a37f42dd0b40981"
+                client = Client(account_sid, auth_token)
+                message = client.messages.create(
+                    body=percent_attentive,
+                    from_="+16204078928",
+                    to="+916361161836"
+                )
+                print(message.sid)
+
+    # Show the frame
+    cv2.imshow('frame', frame)
+
+    # Check if the 'q' key was pressed
+    if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the webcam and close all windows
+# Release the video stream and close all windows
 cap.release()
 cv2.destroyAllWindows()

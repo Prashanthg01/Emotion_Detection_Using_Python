@@ -84,13 +84,13 @@ while True:
             if time.time() - last_attentive_time > 30:
             # Play a sound to alert the user
                 winsound.Beep(1000, 500)
-                account_sid = "ACb7514fa273bb9bb6390f3734f0368ed7"
-                auth_token = "93fb44bdf1a279a42a37f42dd0b40981"
+                account_sid = "YOUR SID"
+                auth_token = "YOUR AUTH_TOKEN"
                 client = Client(account_sid, auth_token)
                 message = client.messages.create(
                     body=percent_attentive,
-                    from_="+16204078928",
-                    to="+916361161836"
+                    from_="+16*********",
+                    to="+91********"
                 )
                 print(message.sid)
 
